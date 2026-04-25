@@ -39,3 +39,82 @@ export const listReviews = async (req, res) => {
 };
 
 
+
+
+
+
+
+
+
+
+
+// export const addReview = async (req, res) => {
+//   try {
+//     const { rating, comment } = req.body;
+
+//     // ✅ Ensure valid ObjectId
+//     if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
+//       return res.status(400).json({ message: "Invalid user ID" });
+//     }
+
+//     const userId = new mongoose.Types.ObjectId(req.user.id);
+//     const eventId = new mongoose.Types.ObjectId(req.params.id);
+
+//     // ✅ Check if user already reviewed
+//     const existingReview = await Review.findOne({
+//       user: userId,
+//       event: eventId
+//     });
+
+//     if (existingReview) {
+//       return res.status(400).json({
+//         message: 'You have already reviewed this event. You can only post one review per event.'
+//       });
+//     }
+
+//     // ✅ Create review
+//     const review = await Review.create({
+//       user: userId,
+//       event: eventId,
+//       rating,
+//       comment
+//     });
+
+//     // ✅ Update average rating
+//     const agg = await Review.aggregate([
+//       { $match: { event: eventId } },
+//       { $group: { _id: "$event", avg: { $avg: "$rating" } } }
+//     ]);
+
+//     const avg = agg[0]?.avg || 0;
+
+//     await Event.findByIdAndUpdate(eventId, { averageRating: avg });
+
+//     res.status(201).json({ review });
+
+//   } catch (err) {
+//     if (err.code === 11000) {
+//       return res.status(400).json({
+//         message: 'You have already reviewed this event. You can only post one review per event.'
+//       });
+//     }
+
+//     console.error('Review creation error:', err);
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
+
+
+// export const listReviews = async (req, res) => {
+//   try {
+//     const reviews = await Review.find({ event: req.params.id })
+//       .populate('user', 'name role'); // ✅ added role (optional)
+
+//     res.json({ reviews });
+
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };

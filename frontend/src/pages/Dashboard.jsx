@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
 import EventTicket from '../components/EventTicket.jsx';
+import AttendancePredictor from '../components/AttendancePredictor.jsx';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [mine, setMine] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState('');
@@ -15,131 +16,18 @@ export default function Dashboard() {
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('Tech');
   const [description, setDescription] = useState('');
+  const [capacity, setCapacity] = useState('');
   const [poster, setPoster] = useState(null);
   const [pending, setPending] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [downloadAction, setDownloadAction] = useState(null);
-  const [toast, setToast] = useState({ open: false, type: 'info', message: '' });
+  const [toast, setToast] = useState(null);
+  const [prediction, setPrediction] = useState(null);
 
-  const showToast = (type, message) => {
-    setToast({ open: true, type, message });
-    setTimeout(() => setToast({ open: false, type: 'info', message: '' }), 3000);
-  };
-
-  const downloadTicketDirect = async (registration) => {
-    try {
-      // Create a temporary div to render the ticket
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.top = '-9999px';
-      tempDiv.style.width = '980px';
-      tempDiv.style.padding = '20px';
-      document.body.appendChild(tempDiv);
-
-      // Render the ticket HTML directly
-      const event = registration.event;
-      const eventDate = new Date(event?.date);
-      const registrationDate = new Date(registration.createdAt);
-
-      tempDiv.innerHTML = `
-        <div style="width: 980px; padding: 20px;">
-          <div style="display: flex; min-height: 360px; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
-            <!-- Left main area -->
-            <div style="flex: 1; padding: 32px; color: white; background: linear-gradient(135deg, #3730a3, #7c3aed, #3730a3);">
-              <!-- Top brand row -->
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
-                <div>
-                  <div style="font-size: 14px; letter-spacing: 0.1em; color: #f0abfc;">EVENT MANAGER</div>
-                  <div style="font-size: 12px; color: #c7d2fe;">Official Event Ticket</div>
-                </div>
-              </div>
-              
-              <!-- Event title -->
-              <div style="margin-bottom: 24px;">
-                <div style="font-size: 36px; font-weight: 800; letter-spacing: 0.025em;">${event?.title}</div>
-                <div style="color: #67e8f9; font-weight: 600; margin-top: 4px;">${event?.category} EVENT</div>
-              </div>
-              
-              <!-- Big date/time row -->
-              <div style="display: flex; align-items: end; gap: 32px; margin-bottom: 24px;">
-                <div style="font-size: 30px; font-weight: 800; letter-spacing: 0.025em;">${eventDate.toLocaleDateString('en-GB')}</div>
-                <div style="font-size: 30px; font-weight: 800; letter-spacing: 0.025em;">${eventDate.toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'})}</div>
-              </div>
-              <div style="text-transform: uppercase; letter-spacing: 0.1em; color: #67e8f9; margin-bottom: 24px;">${event?.location}</div>
-              
-              <!-- Barcode -->
-              <div style="display: flex; align-items: center;">
-                <div style="height: 64px; width: 224px; background: repeating-linear-gradient(90deg, #fff 0, #fff 2px, transparent 2px, transparent 4px); border-radius: 4px;"></div>
-              </div>
-            </div>
-            
-            <!-- Perforation divider -->
-            <div style="width: 2px; background: rgba(255,255,255,0.4); position: relative;">
-              <div style="position: absolute; top: 24px; bottom: 24px; left: 0; right: 0; border-left: 2px dashed rgba(255,255,255,0.7);"></div>
-            </div>
-            
-            <!-- Right stub -->
-            <div style="width: 256px; padding: 24px; color: white; background: linear-gradient(to bottom, #312e81, #1e40af); display: flex; flex-direction: column;">
-              <!-- Vertical date/time -->
-              <div style="color: #67e8f9; font-size: 16px; font-weight: 700; margin-bottom: 20px; writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: 2px; text-shadow: 0 0 10px rgba(103, 232, 249, 0.5);">
-                ${eventDate.getDate().toString().padStart(2, '0')} ${(eventDate.getMonth() + 1).toString().padStart(2, '0')} ${eventDate.getFullYear()} • ${eventDate.getHours().toString().padStart(2, '0')} ${eventDate.getMinutes().toString().padStart(2, '0')}
-              </div>
-              
-              <!-- QR -->
-              <div style="background: rgba(255,255,255,0.1); border-radius: 12px; padding: 12px; margin-bottom: 16px; text-align: center;">
-                <div style="color: #c7d2fe; font-size: 14px; margin-bottom: 8px;">ENTRY QR</div>
-                ${registration.qrCodeDataUrl ? `<img src="${registration.qrCodeDataUrl}" alt="QR" style="margin: 0 auto; width: 144px; height: 144px; border-radius: 6px; background: white; padding: 4px;" />` : ''}
-              </div>
-              
-              <!-- Footer small -->
-              <div style="margin-top: auto; text-align: center; font-size: 10px; color: rgba(199, 210, 254, 0.8);">
-                <div style="font-weight: 600;">EventManager</div>
-                <div>© 2025 All rights reserved</div>
-                <div style="opacity: 0.7;">www.eventmanager.com</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      // Wait for images to load
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Generate PDF
-      const canvas = await html2canvas(tempDiv, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        padding: 20
-      });
-      
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('l', 'mm', 'a4');
-      
-      const pageWidth = 297;
-      const pageHeight = 210;
-      const margin = 15;
-      const contentWidth = pageWidth - (margin * 2);
-      const contentHeight = pageHeight - (margin * 2);
-      
-      const imgWidth = contentWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      const x = margin;
-      const y = margin + (contentHeight - imgHeight) / 2;
-
-      pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
-
-      const fileName = `${event?.title?.replace(/[^a-zA-Z0-9]/g, '_')}_ticket.pdf`;
-      pdf.save(fileName);
-      
-      // Clean up
-      document.body.removeChild(tempDiv);
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-    }
-  };
+  function showToast(type, message) {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -148,276 +36,443 @@ export default function Dashboard() {
     if (user.role === 'admin') loadPending();
   }, [user]);
 
+  
   async function loadMyRegs() {
-    const res = await axios.get('/api/registrations/me');
-    setMine(res.data.registrations || []);
+    try {
+      const res = await axios.get('/api/registrations/me');
+      setMine(res.data.registrations || []);
+    } catch { showToast('error', 'Could not load registrations.'); }
   }
 
   async function loadMyEvents() {
-    const res = await axios.get('/api/events', { params: { organizer: user.id } });
-    setMine(res.data.events || []);
+    try {
+      const res = await axios.get('/api/events', { params: { organizer: user.id } });
+      setMine(res.data.events || []);
+    } catch { showToast('error', 'Could not load events.'); }
   }
 
   async function loadPending() {
-    const res = await axios.get('/api/events', { params: { status: 'pending' } });
-    setPending(res.data.events || []);
+    try {
+      const res = await axios.get('/api/events', { params: { status: 'pending' } });
+      setPending(res.data.events || []);
+    } catch { showToast('error', 'Could not load pending events.'); }
   }
 
   async function loadParticipants(eventId) {
-    const res = await axios.get(`/api/registrations/${eventId}/participants`);
-    setParticipants(res.data.participants || []);
+    try {
+      const res = await axios.get(`/api/registrations/${eventId}/participants`);
+      setParticipants(res.data.participants || []);
+    } catch { showToast('error', 'Could not load participants.'); }
   }
 
   async function exportCsv(eventId) {
-    // Check if participants exist first
     try {
       const check = await axios.get(`/api/registrations/${eventId}/participants`);
-      const list = check.data.participants || [];
-      if (!Array.isArray(list) || list.length === 0) {
-        showToast('error', 'No participants available for this event.');
-        return;
-      }
-    } catch (e) {
-      // If the check fails, show error and abort
-      showToast('error', 'Unable to fetch participants. Please try again.');
-      return;
-    }
-
-    const res = await axios.get(`/api/registrations/${eventId}/participants.csv`, { responseType: 'blob' });
-    const url = window.URL.createObjectURL(new Blob([res.data]));
-    const a = document.createElement('a');
-    a.href = url; a.download = `participants-${eventId}.csv`; a.click();
-    window.URL.revokeObjectURL(url);
+      if (!check.data.participants?.length) { showToast('error', 'No participants to export.'); return; }
+      const res = await axios.get(`/api/registrations/${eventId}/participants.csv`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url; a.download = `participants-${eventId}.csv`; a.click();
+      window.URL.revokeObjectURL(url);
+    } catch { showToast('error', 'Export failed.'); }
   }
 
   async function createEvent(e) {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append('title', title);
-    fd.append('date', date);
-    fd.append('location', location);
-    fd.append('category', category);
-    fd.append('description', description);
-    if (poster) fd.append('poster', poster);
-    await axios.post('/api/events', fd);
-    setTitle(''); setDate(''); setLocation(''); setDescription(''); setPoster(null);
-    await loadMyEvents();
+    try {
+      const fd = new FormData();
+      fd.append('title', title); fd.append('date', date); fd.append('location', location);
+      fd.append('category', category); fd.append('description', description);
+      fd.append('capacity', capacity || 100);
+      if (poster) fd.append('poster', poster);
+      await axios.post('/api/events', fd);
+      setTitle(''); setDate(''); setLocation(''); setDescription(''); setCapacity(''); setPoster(null);
+      setPrediction(null);
+      showToast('success', 'Event created! It will appear after admin approval.');
+      await loadMyEvents();
+    } catch (err) { showToast('error', err.response?.data?.message || 'Failed to create event.'); }
   }
 
-  async function approve(id) { await axios.post(`/api/admin/events/${id}/approve`); await loadPending(); }
-  async function reject(id) { await axios.post(`/api/admin/events/${id}/reject`); await loadPending(); }
+  async function approve(id) {
+    try { await axios.post(`/api/admin/events/${id}/approve`); showToast('success', 'Event approved.'); await loadPending(); }
+    catch { showToast('error', 'Approval failed.'); }
+  }
+
+  async function reject(id) {
+    try { await axios.post(`/api/admin/events/${id}/reject`); showToast('success', 'Event rejected.'); await loadPending(); }
+    catch { showToast('error', 'Rejection failed.'); }
+  }
+
+  const downloadTicketDirect = async (registration) => {
+    try {
+      const ev = registration.event;
+      const evDate = new Date(ev?.date);
+      const tempDiv = document.createElement('div');
+      tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:980px;padding:20px;';
+      document.body.appendChild(tempDiv);
+      tempDiv.innerHTML = `
+        <div style="width:980px;padding:20px;">
+          <div style="display:flex;min-height:320px;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+            <div style="flex:1;padding:32px;color:white;background:linear-gradient(135deg,#0d9488,#059669);">
+              <div style="font-size:12px;letter-spacing:0.1em;opacity:0.7;margin-bottom:24px;">EVENTIZATION TICKET</div>
+              <div style="font-size:28px;font-weight:700;margin-bottom:8px;">${ev?.title}</div>
+              <div style="font-size:14px;opacity:0.8;margin-bottom:24px;">${ev?.category}</div>
+              <div style="font-size:22px;font-weight:700;margin-bottom:4px;">${evDate.toLocaleDateString('en-GB')}</div>
+              <div style="font-size:18px;opacity:0.8;margin-bottom:16px;">${evDate.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}</div>
+              <div style="font-size:14px;opacity:0.8;">${ev?.location}</div>
+            </div>
+            <div style="width:220px;padding:24px;background:#f8fafc;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              ${registration.qrCodeDataUrl ? `<img src="${registration.qrCodeDataUrl}" style="width:140px;height:140px;border-radius:8px;" />` : ''}
+              <div style="margin-top:12px;font-size:11px;color:#64748b;text-align:center;">Scan for entry</div>
+            </div>
+          </div>
+        </div>`;
+      await new Promise(r => setTimeout(r, 800));
+      const canvas = await html2canvas(tempDiv, { scale: 2, useCORS: true, backgroundColor: '#fff' });
+      const pdf = new jsPDF('l', 'mm', 'a4');
+      const w = 267, h = (canvas.height * 267) / canvas.width;
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 15, 15 + (180 - h) / 2, w, h);
+      pdf.save(`${ev?.title?.replace(/[^a-zA-Z0-9]/g, '_')}_ticket.pdf`);
+      document.body.removeChild(tempDiv);
+    } catch { showToast('error', 'Could not generate PDF.'); }
+  };
 
   const analytics = useMemo(() => {
-    // Simple mini-analytics: count by status and category
-    const byStatus = mine.reduce((acc,e)=>{ acc[e.status]=(acc[e.status]||0)+1; return acc; },{});
-    const byCategory = mine.reduce((acc,e)=>{ acc[e.category]=(acc[e.category]||0)+1; return acc; },{});
+    const byStatus = {}, byCategory = {};
+    mine.forEach(e => {
+      byStatus[e.status] = (byStatus[e.status] || 0) + 1;
+      byCategory[e.category] = (byCategory[e.category] || 0) + 1;
+    });
     return { byStatus, byCategory };
   }, [mine]);
 
+  const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all';
+
+  const roleGreeting = {
+    customer: { emoji: '🎟️', sub: 'Your events, passes, and registrations — all in one place.' },
+    organizer: { emoji: '📋', sub: 'Create events, track attendees, and grow your community.' },
+    admin: { emoji: '🛡️', sub: 'Review submissions and keep the platform running smoothly.' },
+  };
+  const greet = roleGreeting[user?.role] || roleGreeting.customer;
+
   return (
-    <div className="space-y-4">
-      {toast.open && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-md text-white ${toast.type==='error'?'bg-red-600':toast.type==='success'?'bg-green-600':'bg-blue-600'}`}>
-          {toast.message}
+    <div className="min-h-screen">
+      {toast && (
+        <div className={`fixed top-16 right-4 z-50 max-w-sm rounded-xl border p-3 text-sm flex items-start gap-2 anim-slide-down ${
+          toast.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <span className="flex-1">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="opacity-60 hover:opacity-100">&times;</button>
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Dashboard</h1>
-        <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center gap-2">
-          <span>{user?.name} ({user?.role})</span>
-          <button className="underline" onClick={logout}>Logout</button>
+
+      <div className="bg-gradient-to-br from-teal-600 via-teal-700 to-emerald-800 text-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 md:py-14">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 anim-fade-up">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-3xl">{greet.emoji}</span>
+                <h1 className="text-2xl md:text-3xl font-bold">Hey, {user?.name?.split(' ')[0]}!</h1>
+              </div>
+              <p className="text-teal-100 text-sm max-w-md">{greet.sub}</p>
+            </div>
+            <div className="flex items-center gap-3 bg-white/10 backdrop-blur rounded-2xl px-5 py-3">
+              <div className="w-10 h-10 rounded-full bg-white/20 text-white text-lg flex items-center justify-center font-bold">{user?.name?.charAt(0)?.toUpperCase()}</div>
+              <div>
+                <p className="font-semibold text-sm">{user?.name}</p>
+                <p className="text-teal-200 text-xs capitalize">{user?.role} Account</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {user?.role === 'customer' && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 w-full">
-          <h2 className="font-semibold mb-4">My Registrations</h2>
-          {mine.length === 0 ? (
-            <div className="mt-6 grid grid-cols-12 gap-4">
-              <div className="col-span-12 text-sm text-slate-500 italic p-8 text-center border rounded-xl w-full">
-                No registrations found yet.
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {mine.map((r) => (
-              <div key={r._id} className="p-4 border rounded-xl hover:shadow-md transition-shadow">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="font-medium text-lg">{r.event?.title}</div>
-                    <div className="text-sm text-slate-500 mt-1">
-                      {new Date(r.event?.date).toLocaleDateString()} • {r.event?.location}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      Status: <span className={`font-medium ${
-                        r.status === 'registered' ? 'text-green-600' : 'text-yellow-600'
-                      }`}>{r.status}</span>
-                    </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-6 relative z-10 pb-12 space-y-6">
+
+        {user?.role === 'customer' && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 anim-fade-up anim-delay-1">
+              {[
+                { n: mine.length, label: 'Total Events', icon: '📅', color: 'from-teal-500 to-teal-600' },
+                { n: mine.filter(r => r.status === 'registered').length, label: 'Confirmed', icon: '✅', color: 'from-emerald-500 to-emerald-600' },
+                { n: mine.filter(r => r.status !== 'registered').length, label: 'Pending', icon: '⏳', color: 'from-amber-500 to-amber-600' },
+                { n: mine.filter(r => r.qrCodeDataUrl).length, label: 'Passes Ready', icon: '🎫', color: 'from-violet-500 to-violet-600' },
+              ].map((s, i) => (
+                <div key={i} className={`bg-gradient-to-br ${s.color} rounded-2xl p-5 text-white hover:-translate-y-1 transition-all cursor-default`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="text-3xl font-extrabold">{s.n}</span>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    {r.qrCodeDataUrl && (
-                      <img src={r.qrCodeDataUrl} className="h-16 w-16 border rounded-lg" alt="QR Code" />
-                    )}
-                    <button
-                      onClick={() => setSelectedTicket(r)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      View Ticket
-                    </button>
-                    <button
-                      onClick={() => downloadTicketDirect(r)}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      📥 Download
-                    </button>
-                  </div>
+                  <p className="text-sm text-white/80 font-medium">{s.label}</p>
                 </div>
-              </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
 
-      {user?.role === 'organizer' && (
-        <div className="grid md:grid-cols-2 gap-4 w-full">
-          <form onSubmit={createEvent} className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
-            <h2 className="font-semibold">Create Event</h2>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Title</label>
-              <input className="input w-full" placeholder="Title" value={title} onChange={(e)=>setTitle(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Date & Time</label>
-              <input className="input w-full" type="datetime-local" value={date} onChange={(e)=>setDate(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Location</label>
-              <input className="input w-full" placeholder="Location" value={location} onChange={(e)=>setLocation(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Category</label>
-              <select className="input w-full" value={category} onChange={(e)=>setCategory(e.target.value)}>
-                <option>Tech</option><option>Sports</option><option>Cultural</option><option>Workshop</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Description</label>
-              <textarea className="input w-full min-h-[120px]" rows="5" placeholder="Describe the event in detail" value={description} onChange={(e)=>setDescription(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm text-slate-600">Poster</label>
-              <input className="input w-full" type="file" onChange={(e)=>setPoster(e.target.files[0])} />
-            </div>
-            <div className="flex justify-end">
-              <button className="btn">Publish</button>
-            </div>
-          </form>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-              <h2 className="font-semibold mb-2">Analytics</h2>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="font-medium mb-1">By Status</div>
-                  <ul className="space-y-1">{Object.entries(analytics.byStatus).map(([k,v])=> <li key={k} className="flex justify-between"><span>{k}</span><span className="font-semibold">{v}</span></li>)}</ul>
-                </div>
-                <div>
-                  <div className="font-medium mb-1">By Category</div>
-                  <ul className="space-y-1">{Object.entries(analytics.byCategory).map(([k,v])=> <li key={k} className="flex justify-between"><span>{k}</span><span className="font-semibold">{v}</span></li>)}</ul>
-                </div>
+            <section className="bg-white border border-gray-100 rounded-2xl overflow-hidden anim-fade-up anim-delay-2">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">My Registrations</h2>
+                <span className="text-xs text-gray-400">{mine.length} total</span>
               </div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-              <h2 className="font-semibold mb-2">My Events</h2>
-              <ul className="space-y-2">
-                {mine.map((e) => (
-                  <li key={e._id} className="p-3 border rounded-xl grid grid-cols-12 gap-3 items-center">
-                    <div className="col-span-9">
-                      <div className="font-medium">{e.title}</div>
-                      <div className="text-sm text-slate-500">Status: {e.status}</div>
+              {mine.length === 0 ? (
+                <div className="text-center py-16 px-6">
+                  <div className="w-16 h-16 rounded-2xl bg-teal-50 text-3xl flex items-center justify-center mx-auto mb-4">🎫</div>
+                  <p className="text-sm text-gray-500 mb-2">You haven't registered for any events yet.</p>
+                  <a href="/" className="inline-flex items-center gap-1 text-sm text-teal-600 font-semibold hover:underline">
+                    Browse events
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                  </a>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {mine.map((r, i) => (
+                    <div key={r._id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50/50 transition-colors anim-fade-up anim-delay-${Math.min(i + 1, 6)}`}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                        {r.event?.title?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{r.event?.title}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                          {new Date(r.event?.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          <span className="text-gray-300">·</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                          {r.event?.location}
+                        </p>
+                      </div>
+                      <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                        r.status === 'registered' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                      }`}>{r.status}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {r.qrCodeDataUrl && <img src={r.qrCodeDataUrl} className="h-11 w-11 rounded-lg border border-gray-200" alt="QR" />}
+                        <button onClick={() => setSelectedTicket(r)} className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 hover:bg-teal-100 transition-all hover:-translate-y-0.5">View</button>
+                        <button onClick={() => downloadTicketDirect(r)} className="text-xs font-semibold text-white bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl px-3 py-2 hover:from-teal-700 hover:to-emerald-700 transition-all hover:-translate-y-0.5">PDF</button>
+                      </div>
                     </div>
-                    <div className="col-span-3 justify-self-end grid grid-cols-1 gap-2 justify-items-end">
-                      <button className="btn-outline w-24 px-3 py-1 text-xs" onClick={()=>{setSelectedEvent(e._id);loadParticipants(e._id);}}>Participants</button>
-                      <button className="btn w-24 px-3 py-1 text-xs" onClick={()=>exportCsv(e._id)}>Export CSV</button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {user?.role === 'organizer' && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 anim-fade-up anim-delay-1">
+              {[
+                { n: mine.length, label: 'Total Events', icon: '📊', color: 'from-teal-500 to-teal-600' },
+                { n: mine.filter(e => e.status === 'approved').length, label: 'Live', icon: '🟢', color: 'from-emerald-500 to-emerald-600' },
+                { n: mine.filter(e => e.status === 'pending').length, label: 'In Review', icon: '⏳', color: 'from-amber-500 to-amber-600' },
+                { n: Object.keys(analytics.byCategory).length, label: 'Categories', icon: '🏷️', color: 'from-violet-500 to-violet-600' },
+              ].map((s, i) => (
+                <div key={i} className={`bg-gradient-to-br ${s.color} rounded-2xl p-5 text-white hover:-translate-y-1 transition-all cursor-default`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="text-3xl font-extrabold">{s.n}</span>
+                  </div>
+                  <p className="text-sm text-white/80 font-medium">{s.label}</p>
+                </div>
+              ))}
             </div>
 
-            {selectedEvent && (
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-                <h2 className="font-semibold mb-2">Participants</h2>
-                {participants.length === 0 ? (
-                  <div className="text-sm text-slate-500 italic p-4 text-center border rounded-lg">No participants found</div>
-                ) : (
-                  <ul className="space-y-1 text-sm">
-                    {participants.map(a => (
-                      <li key={a._id} className="flex items-center justify-between p-2 border rounded-lg">
-                        <span>{a.user?.name} ({a.user?.email})</span>
-                        <span className="text-slate-500">{a.status}</span>
-                      </li>
-                    ))}
-                  </ul>
+            <div className="grid lg:grid-cols-5 gap-6">
+              <form onSubmit={createEvent} className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl overflow-hidden self-start anim-fade-up anim-delay-2">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-teal-50 to-emerald-50">
+                  <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    <span className="text-lg">✨</span> Create New Event
+                  </h2>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Title</label>
+                    <input className={inputCls} placeholder="Event title" required value={title} onChange={e => setTitle(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Date & Time</label>
+                      <input className={inputCls} type="datetime-local" required value={date} onChange={e => setDate(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Category</label>
+                      <select className={`${inputCls} bg-gray-50`} value={category} onChange={e => setCategory(e.target.value)}>
+                        <option>Tech</option><option>Sports</option><option>Cultural</option><option>Workshop</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Location</label>
+                    <input className={inputCls} placeholder="Venue or online link" required value={location} onChange={e => setLocation(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Capacity</label>
+                    <input className={inputCls} type="number" placeholder="Expected capacity" min="1" value={capacity} onChange={e => setCapacity(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Description</label>
+                    <textarea className={`${inputCls} min-h-[80px]`} rows="3" placeholder="What's this event about?" value={description} onChange={e => setDescription(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Poster Image</label>
+                    <input className={inputCls} type="file" accept="image/*" onChange={e => setPoster(e.target.files[0])} />
+                  </div>
+                  
+                  <AttendancePredictor 
+                    eventData={{
+                      title,
+                      description,
+                      category,
+                      date,
+                      location,
+                      capacity: capacity ? parseInt(capacity) : 100
+                    }}
+                    onPrediction={setPrediction}
+                    organizerData={user}
+                  />
+                  
+                  <button type="submit" className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-sm font-semibold rounded-xl px-4 py-3 hover:from-teal-700 hover:to-emerald-700 transition-all hover:-translate-y-0.5">
+                    Publish Event
+                  </button>
+                </div>
+              </form>
+
+              <div className="lg:col-span-3 space-y-4">
+                <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden anim-fade-up anim-delay-3">
+                  <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="text-base font-semibold text-gray-900">My Events</h2>
+                    <span className="text-xs text-gray-400">{mine.length} events</span>
+                  </div>
+                  {mine.length === 0 ? (
+                    <div className="text-center py-12 px-6">
+                      <div className="w-16 h-16 rounded-2xl bg-gray-50 text-3xl flex items-center justify-center mx-auto mb-3">📅</div>
+                      <p className="text-sm text-gray-400">No events created yet. Use the form to publish your first event.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {mine.map((ev, i) => {
+                        const statusCls = ev.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : ev.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+                        return (
+                          <div key={ev._id} className={`px-6 py-3.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors anim-fade-up anim-delay-${Math.min(i + 1, 6)}`}>
+                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+                              {ev.title?.charAt(0)?.toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 text-sm truncate">{ev.title}</p>
+                              <span className={`inline-block mt-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusCls}`}>{ev.status}</span>
+                            </div>
+                            <button onClick={() => { setSelectedEvent(ev._id); loadParticipants(ev._id); }} className="text-xs font-semibold text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-2.5 py-1.5 hover:bg-teal-100 transition-all whitespace-nowrap">Attendees</button>
+                            <button onClick={() => exportCsv(ev._id)} className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-gray-100 transition-all whitespace-nowrap">CSV</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {selectedEvent && (
+                  <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden anim-scale-in">
+                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                      <h2 className="text-base font-semibold text-gray-900">Participants</h2>
+                      <button onClick={() => setSelectedEvent('')} className="text-xs font-medium text-gray-400 hover:text-gray-600 bg-gray-100 rounded-lg px-2.5 py-1">Close</button>
+                    </div>
+                    {participants.length === 0 ? (
+                      <div className="text-center py-10 px-6">
+                        <p className="text-sm text-gray-400">No participants registered yet.</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-50">
+                        {participants.map(p => (
+                          <div key={p._id} className="px-6 py-3 flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">{p.user?.name?.charAt(0)?.toUpperCase()}</div>
+                              <div>
+                                <p className="font-medium text-gray-800">{p.user?.name}</p>
+                                <p className="text-xs text-gray-400">{p.user?.email}</p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">{p.status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          </>
+        )}
 
-      {user?.role === 'admin' && (
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 w-full">
-          <h2 className="font-semibold mb-2">Pending Events</h2>
-          <ul className="space-y-2">
-            {pending.map((e) => (
-              <li key={e._id} className="p-3 border rounded-xl grid grid-cols-12 gap-3 items-center">
-                <div className="col-span-9">
-                  <div className="font-medium">{e.title}</div>
-                  <div className="text-sm text-slate-500">Organizer: {e.organizer?.name}</div>
+        {user?.role === 'admin' && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 anim-fade-up anim-delay-1">
+              {[
+                { n: pending.length, label: 'Pending Review', icon: '⏳', color: 'from-amber-500 to-amber-600' },
+                { n: '∞', label: 'Platform Reach', icon: '🌍', color: 'from-teal-500 to-teal-600' },
+                { n: 'Admin', label: 'Access Level', icon: '🛡️', color: 'from-violet-500 to-violet-600' },
+              ].map((s, i) => (
+                <div key={i} className={`bg-gradient-to-br ${s.color} rounded-2xl p-5 text-white hover:-translate-y-1 transition-all cursor-default`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="text-3xl font-extrabold">{s.n}</span>
+                  </div>
+                  <p className="text-sm text-white/80 font-medium">{s.label}</p>
                 </div>
-                <div className="col-span-3 justify-self-end grid grid-cols-2 gap-2">
-                  <button className="btn w-24 px-3 py-1 text-xs" onClick={()=>approve(e._id)}>Approve</button>
-                  <button className="btn-outline w-24 px-3 py-1 text-xs" onClick={()=>reject(e._id)}>Reject</button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+              ))}
+            </div>
 
-      {/* Ticket Modal */}
-      {selectedTicket && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold">Event Ticket</h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => downloadAction && downloadAction()}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-medium"
-                  >
-                    📥 Download Ticket
-                  </button>
-                  <button
-                    onClick={() => setSelectedTicket(null)}
-                    className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </div>
+            <section className="bg-white border border-gray-100 rounded-2xl overflow-hidden anim-fade-up anim-delay-2">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-base font-semibold text-gray-900">Events Awaiting Approval</h2>
+                <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-3 py-1 rounded-full">{pending.length} pending</span>
               </div>
-              <EventTicket 
-                registration={selectedTicket} 
+              {pending.length === 0 ? (
+                <div className="text-center py-16 px-6">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-3xl flex items-center justify-center mx-auto mb-4">✅</div>
+                  <p className="text-gray-500 text-sm font-medium">All caught up!</p>
+                  <p className="text-gray-400 text-xs mt-1">No events are waiting for your review.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {pending.map((ev, i) => (
+                    <div key={ev._id} className={`px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4 hover:bg-gray-50/50 transition-colors anim-fade-up anim-delay-${Math.min(i + 1, 6)}`}>
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-500 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                        {ev.title?.charAt(0)?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 text-sm">{ev.title}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1.5">
+                          by <span className="font-medium text-gray-700">{ev.organizer?.name}</span>
+                          <span className="text-gray-300">·</span>
+                          <span className="bg-gray-100 px-2 py-0.5 rounded text-[10px] font-medium text-gray-600">{ev.category}</span>
+                        </p>
+                      </div>
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => approve(ev._id)} className="text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl px-5 py-2 hover:from-emerald-600 hover:to-emerald-700 transition-all hover:-translate-y-0.5">Approve</button>
+                        <button onClick={() => reject(ev._id)} className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-5 py-2 hover:bg-red-100 transition-all hover:-translate-y-0.5">Reject</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
+
+      {selectedTicket && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 anim-fade-in" onClick={() => setSelectedTicket(null)}>
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto anim-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+              <h3 className="font-semibold text-gray-900">Event Ticket</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={() => downloadAction && downloadAction()} className="text-xs font-semibold text-white bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl px-4 py-2 hover:from-teal-700 hover:to-emerald-700 transition-all">Download PDF</button>
+                <button onClick={() => setSelectedTicket(null)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+              </div>
+            </div>
+            <div className="p-6">
+              <EventTicket
+                registration={selectedTicket}
                 user={user}
-                onReady={(fn) => setDownloadAction(() => fn)}
-                onDownload={() => {
-                  // Optional: Show success message or close modal
-                  console.log('Ticket downloaded successfully');
-                }}
+                onReady={fn => setDownloadAction(() => fn)}
+                onDownload={() => {}}
               />
             </div>
           </div>

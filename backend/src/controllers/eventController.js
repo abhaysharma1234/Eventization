@@ -1,11 +1,34 @@
 import Event from '../models/Event.js';
 import Registration from '../models/Registration.js';
+import User from '../models/User.js';
+import attendancePredictionService from '../services/attendancePrediction.js';
 
 export const createEvent = async (req, res) => {
   try {
     const posterUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
-    const event = await Event.create({ ...req.body, organizer: req.user.id, posterUrl });
-    res.status(201).json({ event });
+    
+    // Get organizer data for prediction
+    const organizer = await User.findById(req.user.id).select('points name');
+    
+    // Predict attendance for the new event
+    const prediction = await attendancePredictionService.predictAttendance(
+      req.body,
+      organizer
+    );
+    
+    // Create event with prediction data
+    const eventData = {
+      ...req.body,
+      organizer: req.user.id,
+      posterUrl,
+      predictedAttendance: prediction.predictedAttendance,
+      predictionConfidence: prediction.confidence,
+      predictionMethodology: prediction.methodology,
+      lastPredictedAt: new Date()
+    };
+    
+    const event = await Event.create(eventData);
+    res.status(201).json({ event, prediction });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -55,6 +78,62 @@ export const getEvent = async (req, res) => {
     if (!event) return res.status(404).json({ message: 'Not found' });
     const count = await Registration.countDocuments({ event: event._id, status: { $ne: 'cancelled' } });
     res.json({ event, registrations: count });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+export const predictAttendance = async (req, res) => {
+  try {
+    const { title, description, category, date, location, capacity } = req.body;
+    
+    // Validate required fields
+    if (!title || !description || !category || !date) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: title, description, category, date' 
+      });
+    }
+
+    // Get organizer data
+    const organizer = await User.findById(req.user.id).select('points name');
+    if (!organizer) {
+      return res.status(404).json({ message: 'Organizer not found' });
+    }
+
+    // Predict attendance
+    const prediction = await attendancePredictionService.predictAttendance(
+      {
+        title,
+        description,
+        category,
+        date: new Date(date),
+        location,
+        capacity: capacity || 100
+      },
+      organizer
+    );
+
+    res.json({
+      prediction,
+      eventData: {
+        title,
+        category,
+        date,
+        capacity: capacity || 100,
+        organizer: organizer.name
+      }
+    });
+
+  } catch (err) {
+    console.error('Attendance prediction error:', err);
+    res.status(500).json({ message: 'Failed to predict attendance' });
+  }
+};
+
+export const getModelStats = async (req, res) => {
+  try {
+    const stats = await attendancePredictionService.getModelStats();
+    res.json(stats);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
