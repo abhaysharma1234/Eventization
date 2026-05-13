@@ -98,8 +98,10 @@ npm start
 - Chatbot integration
 - Attendance prediction using machine learning
 - QR code generation for tickets
-- Real-time notifications via Socket.io
 - Admin dashboard with statistics
+
+
+
 
 ## API Documentation
 
@@ -112,11 +114,20 @@ The backend provides RESTful APIs. Refer to the routes in `backend/src/routes/` 
 - **Authentication:** JWT
 - **File Upload:** Multer
 
-## Contributing
+## Team Members
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests (if available)
-5. Submit a pull request
 
+- Mrigendra Kumar 2210991941 (Team Lead)
+- Abhay Sharma 2210990028
+- Sonu Kumar 2210992399
+- Kumar Saurav 2210991823
+
+## Mentor
+
+
+Dr.Shikha Tuteja
+
+## Note
+
+
+This project is developed as part of an academic project(Chitkara University).
